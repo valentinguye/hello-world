@@ -871,23 +871,23 @@ In fact, they are small qtys with normal values.
 browse if tag_multioutput_cpo >0 & tag_multioutput_cpo<. & (otl_cpo_price == 1)
 
 /*
-Voil�, sachant cela et avec la r�ponse de BPS on d�cidera de garder ces 247 (317-70) obs. ou non.  
+Voilà, sachant cela et avec la réponse de BPS on décidera de garder ces 247 (317-70) obs. ou non.  
 On peut aussi checker comment ca se passe pour pko. */
 inspect tag_multioutput_pko
 *There are 326 obs. coming from aggregation of pko. 
 count if tag_multioutput_pko >0 & tag_multioutput_pko<. & otl_pko == 1 
-*Parmi lesquelles 179 ont �t� consid�r�es comme otls ! 
+*Parmi lesquelles 179 ont été considérées comme otls ! 
 count if tag_multioutput_pko >0 & tag_multioutput_pko<. & (otl_out_ton_pko == 1 | otl_out_val_pko==1)
-*184 si on consid�re les d�finitions statistiques d'otl (qui produisent davantage d'otls)
+*184 si on considère les définitions statistiques d'otl (qui produisent davantage d'otls)
 count if tag_multioutput_pko >0 & tag_multioutput_pko<. & (otl_out_ton_pko == 1)
-*160 obs. venant de l'aggr�gation de pko sont des otls en terme de quantit� 
+*160 obs. venant de l'aggrégation de pko sont des otls en terme de quantité 
 count if tag_multioutput_pko >0 & tag_multioutput_pko<. & (otl_out_val_pko == 1)
 *et 155 en termes de value. 
 count if tag_multioutput_pko >0 & tag_multioutput_pko<. & (otl_pko_price == 1)
-*seulement 6 en termes de prix: lorsque l'aggr�gation a produit des valeurs tr�s �lev�es pour quantit� et value, le ratio lui n'est pas affect�. 
+*seulement 6 en termes de prix: lorsque l'aggrégation a produit des valeurs très élevées pour quantité et value, le ratio lui n'est pas affecté. 
 browse if tag_multioutput_pko >0 & tag_multioutput_pko<. & otl_pko == 1 
 browse if tag_multioutput_pko >0 & tag_multioutput_pko<.
-*Pour �tre vraiment rigoureux il faudrait faire un test de comparaison des distributions de ces 247 obs. et de l'ensemble des obs nettes d'otls. 
+*Pour être vraiment rigoureux il faudrait faire un test de comparaison des distributions de ces 247 obs. et de l'ensemble des obs nettes d'otls. 
 gen flag_multioutput = (tag_multioutput_cpo>0) if tag_multioutput_cpo<. 
 ksmirnov out_ton_cpo, by(flag_multioutput) exact
 ksmirnov out_val_cpo, by(flag_multioutput) exact
@@ -1339,7 +1339,7 @@ and the prices they got for it were hence actually (more) exposed to internation
 However, the coefficient of the first-stage will be very imprecisly measured. 
 
 Moreover, what does it mean exposure (export_pct) is zero? Well if we are in the DID specification this is clear: firms that don't export are not exposed to a change in export tax for instance
-In the panel case, �zero exposure implies that national price is not impacted by international price... 
+In the panel case, ´zero exposure implies that national price is not impacted by international price... 
 */
 
 
@@ -1467,15 +1467,15 @@ if valid_out_ton_cpo==1 | valid_out_ton_pko==1 | valid_out_ton_rpo==1 | valid_ou
 	/*	
 	L'idee c'est que ces obs. nous niquent un peu tout statistiquement, donc on les garde si vraiment elles sont coherentes avec toute l'info qu'on a. 	
 
-	output ET value sont otls. Lˆ, la question se pose de savori si on valide l'obs. si le prix est du coup normal ? 
+	output ET value sont otls. LË, la question se pose de savori si on valide l'obs. si le prix est du coup normal ? 
 		a priori non, on ne la valide pas, c'est bien pour ca qu'on a fait des tests sur les composants du prix (quantite et valeur) et pas simplement retire les 
 		valeurs extrenes du ratio calcule. 
 
-* 1. Est-ce que la production de PKO est plus grande que celle de CPO. (reste à définir le ratio...), le calculer pour chaque obs et voir sa distribution. 
+* 1. Est-ce que la production de PKO est plus grande que celle de CPO. (reste Ã  dÃ©finir le ratio...), le calculer pour chaque obs et voir sa distribution. 
 * 2. Est-ce que pour celles qui ont un bon ratio, la production des DEUX est encore anormalement faible ? 
 * 3. Est-ce que le prix est anormal ? 
 * 4. Est-ce que lorsque le prix est normal, la valeur dans l'absolue est anormale ? 
-* 5. Est-ce que les valeurs du même individu sont très différentes les autres années ? 
+* 5. Est-ce que les valeurs du mÃªme individu sont trÃ¨s diffÃ©rentes les autres annÃ©es ? 
 * 6. Est-ce que le ratio avec l'input est anormal ? 
 * 7. Est-ce que lorsque le ratio output/input est normal, l'input ET l'output dans l'absolu sont anormaux ? 
 
@@ -1515,7 +1515,7 @@ if valid_out_ton_cpo==1 | valid_out_ton_pko==1 | valid_out_ton_rpo==1 | valid_ou
 	**Missing and zeros. 
 	*browse if in_tot_qty_ton_ffb ==0|in_tot_qty_ton_ffb>=.
 
-	*Comme on ne se sert du input en l'occurrence que pour avoir un ordre de grandeur pour évaluer les ouputs, on va prendre une conversion des kelapa sawit segar: 
+	*Comme on ne se sert du input en l'occurrence que pour avoir un ordre de grandeur pour Ã©valuer les ouputs, on va prendre une conversion des kelapa sawit segar: 
 	*According to Wikipedia Tenera is the main species used. So use the fruit/bunch ratio of 66.5% 
 	
 
