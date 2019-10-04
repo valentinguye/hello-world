@@ -1,3 +1,26 @@
+/*STRUCTURE: 
+** Some pre-processing
+***DUPLICATES***
+***DEFLATE***
+***otlS***
+	0. statistical otls
+	1. output/input ratio
+	2. cpo/pko ratio
+	3. variation rate
+
+***PRICE***
+***AGGREGATED OBS.***
+***PERCENTAGE EXPORTED***
+***REFINING***
+
+*** /// ADD ALL AVAILABLE GEOGRAPHIC INFORMATION from IBS_base_prelu.dta and IBS_desa2000.dta \\\ *** 
+
+
+Over all the process, imp1 variables are associated with stronger imputations than imp2. 
+It is to say that imp1 sample will be more modified than imp2, in an attempt to reduce noise.
+  
+*/
+
 *use /Users/valentinguye/Desktop/IBS_1998old.dta, clear  
 use "C:\Users\guyv\ownCloud\opalval\build\input\IBS_1998.dta", clear
 sort firm_id year 
@@ -49,27 +72,6 @@ foreach var of varlist $in_cpo_vars {
 	bys firm_id : gen double lag_`var' = `var'[_n-1] 
 }
 global lag_in_cpo_vars lag_in_dom_ton_cpo lag_in_dom_val_cpo lag_in_imp_ton_cpo lag_in_imp_val_cpo lag_in_tot_ton_cpo lag_in_tot_val_cpo
-
-/*structure: 
-
-***DUPLICATES***
-***DEFLATE***
-***otlS***
-	0. statistical otls
-	1. output/input ratio
-	2. cpo/pko ratio
-	3. variation rate
-
-***PRICE***
-***AGGREGATED OBS.***
-***PERCENTAGE EXPORTED***
-***REFINING***
-
-Over all the process, imp1 variables are associated with stronger imputations than imp2. 
-It is to say that imp1 sample will be more modified than imp2, in an attempt to reduce noise.
-  
-*/
-
 
 
 
@@ -1172,12 +1174,153 @@ foreach commo of global commodity{
 				(valid_out_ton_cpo==1 | valid_out_val_cpo==1) 	
 	*************************************************
 
-save C:/Users/guyv/ownCloud/opalval/build/input/IBS_1998_cleaned.dta, replace
-saveold C:/Users/guyv/desktop/IBS_1998_cleaned.dta, version(12) replace 
 
 
 
 
+save C:/Users/guyv/ownCloud/opalval/build/output/IBS_1998_cleaned.dta, replace
+*** ATTENTION *** it is saved in *output* 
+
+
+
+
+
+
+
+
+
+
+************************************************************************************************************
+*** ADD AND CLEAN GEOGRAPHIC VARIABLES ***
+************************************************************************************************************
+
+**** prepare district crosswalk 
+import delimited C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\District-Proliferation-Crosswalk_complete.csv, clear 
+reshape long bps_ name_ , i(v1) j(year)
+egen year_prov_distr = concat(year bps_)
+duplicates drop year_prov_distr, force
+save "C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\province_district_code_names_93_2016.dta", replace 
+********************************************************************************************************
+
+
+**** prepare desa crosswalk 
+import delimited C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\desa_crosswalk_1998_2014.csv, clear 
+*not all id variables are of the same type 
+forvalues y = 1998/2014{
+	destring id`y', replace force 
+}
+reshape long id nm, i(v1) j(year)
+tostring id, generate(desa_id)
+egen year_desa_id = concat(year desa_id)
+duplicates drop year_desa_id, force
+save "C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\desa_code_names_98_2014.dta", replace 
+*************************************************************************************************************
+
+**** Attribute as much geographic information as possible.  
+use "C:\Users\guyv\ownCloud\opalval\build\output\IBS_1998_cleaned.dta", clear
+sort firm_id year 
+
+merge 1:1 firm_id year using C:\Users\guyv\ownCloud\opalval\build\input\mill_geolocalization\IBS_base_prelu.dta, generate(merge_base_prelu) keepusing(province district /// 
+	desa_code desa_name kab_code kab_name kec_code kec_name prov_code prov_name desa_id district_id desa_code_2000 district_code_1993) update
+* all master's are matched because IBS_base_prelu is on 1998-2015 although desa_id, like other variables, is available only until 2010. 
+* 1220 obs. that were missing on either province or district have been updated (0 nonmissing conflict). 
+
+*remove obs. from using that have not matched (i.e. IBS firms that are no mills)
+drop if merge_base_prelu == 2
+drop merge_base_prelu
+
+* We don't add desa_id and desa_code_2000 for 368 and 367 obs. resp. from IBS_desa2000 (other variables are not updated by IBS_desa2000) 
+* because these are obs already removed purposedly when desa_fl (string_fl) ==1. 
+
+
+*** DISTRICTS 
+** For 2000-2010 use district_id already available. For other years, build it. 
+tostring province, generate(province_str)
+tostring district, generate(district_str)
+*apparently some dots are not converted to missings, (problem does not occur for kab_code) so: 
+replace district_str = "" if district_str == "." 
+replace province_str = "" if province_str == "." 
+replace province_str = "0" + province_str if province < 10 
+replace district_str = "0" + district_str if district < 10 
+replace province_str = prov_code if !mi(prov_code) & mi(province_str)
+replace district_str = kab_code if !mi(kab_code) & mi(district_str)
+
+egen prov_distr = concat(province_str district_str)
+replace prov_distr = "" if mi(province) | mi(district_str)
+replace prov_distr = district_id if year > 1999 & year < 2011 
+replace prov_distr = "" if length(prov_distr) < 4
+/* About the difference between district_id - concatenation of prov_code and kec_code - and prov_distr, concatenation of district and province.
+91 cases (+7 where it's just that district_id has not the right length), most of the times it is the first obs of a mill, and the following codes are 
+the same as the district, not the same as the kab_code. This suggests that the prov_distr is more accurate, and that we should not remove it in these cases, which will 
+be done though, because the district mode_fl is based on district_id crosswalked. But not so important because in these cases we necessarily have information on the following 
+years (and we need only one correct). 
+gen prov_distr_di =((district_str!=kab_code &!mi(kab_code)) | (province_str != prov_code &!mi(prov_code)))
+bys firm_id (year): gen any_di = 1 if sum(prov_distr_di) >0
+*/
+** Add names
+egen year_prov_distr = concat(year prov_distr) if !mi(prov_distr)
+merge m:1 year_prov_distr using "C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\province_district_code_names_93_2016.dta", generate( /// 
+	merge_district_names) keepusing(name_)
+drop if merge_district_names == 2 
+drop year_prov_distr
+rename name_ district_name  
+replace district_name = "*" + kab_name if mi(district_name) & !mi(kab_name)
+
+** Clean 
+* remove likely wrong district ids and names 
+bys firm_id (year): egen district_code_1993_mode = mode(district_code_1993)
+g district_mode_fl = (district_code_1993 != district_code_1993_mode & !mi(district_code_1993) & !mi(district_code_1993_mode))
+replace prov_distr = "" if district_mode_fl==1
+replace district_name = "" if district_mode_fl==1
+drop district_code_1993_mode 
+/* Don't use firm_district_1993_fl_md because apparently it is a flag on firms that have more than 2 instances of collapsed 2000 district code and _mode 
+(from district_mode.do from Sebi). And we want to allow for long periods or repeated years with un-actualised district codes after a split. 
+*/
+
+* some don't match even though they have a deemed valid prov_distr. Let's flag them... 
+g prov_distr_suspect_fl = 1 if merge_district_names == 1 & !mi(prov_distr)
+drop merge_district_names
+/* most of them have inherited a name from kab_name 
+browse prov_distr district_id if prov_distr_fl_suspect == 1
+*/
+
+*** VILLAGES
+** Use desa_id imported from IBS_base_prelu
+egen year_desa_id = concat(year desa_id) if !mi(desa_id)
+
+** Add names
+merge m:1 year_desa_id using  "C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization\desa_code_names_98_2014.dta", generate( /// 
+	merge_village_names) keepusing(nm)
+drop if merge_village_names == 2 
+rename nm village_name  
+replace village_name = "*" + desa_name if mi(village_name) & !mi(desa_name)
+count if merge_village_names ==1 & year > 1999 & year < 2011
+
+
+** Clean 
+bys firm_id (year): egen desa_code_2000_mode = mode(desa_code_2000)
+g village_mode_fl = 1 if desa_code_2000 != desa_code_2000_mode & !mi(desa_code_2000) & !mi(desa_code_2000_mode)
+
+replace desa_id = "" if village_mode_fl==1
+replace village_name = "" if village_mode_fl==1
+drop desa_code_2000_mode  
+/* the string mismatch flag has already been taken into account by using desa_id from IBS_base_prelu from the beginning rather than desa_id from IBS_desa2000
+*/
+
+* some don't match even though they have a deemed valid prov_distr. Let's flag them... 
+g desa_id_suspect_fl = 1 if merge_village_names == 1 & !mi(desa_id)
+drop merge_village_names
+ 
+*774 obs (in 2000-2010) don't match a village code from crosswalk eventhough they have a desa_id
+* among them 557 are replaced by desa_name 
+
+
+
+order desa_id, after(industry_code)
+sort firm_id year 
+
+save C:/Users/guyv/ownCloud/opalval/build/output/IBS_1998_cleaned.dta, replace
+*** ATTENTION *** it is saved in *output* 
 
 
 
