@@ -42,7 +42,7 @@ setwd("C:/Users/guyv/ownCloud/opalval/build/temp/mill_geolocalization")
 heilmayr <- read_excel("traseMills_capEstyear.xlsx")
 
 # read IBS mills
-ibs_desa <- readRDS("IBSmills_desageom.Rdata")
+ibs <- readRDS("IBSmills_desageom.Rdata")
 
 ########################################### MATCH IBS AND HEILMAYR MILLS ################################################
 ## Indonesian CRS
@@ -54,8 +54,8 @@ ibs_desa <- readRDS("IBSmills_desageom.Rdata")
 indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
 #prepare the sfc of ibs mills and their most recently known villages. 
-ibs <- filter(ibs_desa, is.na(geom)== F)   
-ibs_desa_na <- filter(ibs_desa, is.na(geom))
+ibs <- filter(ibs, is.na(geom)== F)   
+ibs_na <- filter(ibs, is.na(geom))
 ibs <- st_as_sf(ibs, crs = indonesian_crs)
 ibs <- st_transform(ibs, crs = indonesian_crs)
 
@@ -145,8 +145,8 @@ ibs_unref <- select(ibs_unref, -lon, -lat)
 
 #### Those that have no desa polygon though they had an un-flagged desa_id (76)
 # they return to stata to get merged with the panel and geolocalized manually. 
-ibs_desa_na <- select(ibs_desa_na, firm_id)
-write.dta(ibs_desa_na, "pre2011_bad_desa_id.dta")
+ibs_na <- select(ibs_na, firm_id)
+write.dta(ibs_na, "pre2011_bad_desa_id.dta")
 
 
 #### Those that have a desa polygon but match with no Heilmayr mills (592)
