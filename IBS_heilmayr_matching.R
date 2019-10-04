@@ -1,0 +1,253 @@
+######################################################################
+#                                                                    #
+#   Match IBS mill dataset with Heilmayr's                           #
+#                                                                    #
+#   Input:  - IBS mills, each of the year it has the most recent     #
+#             valid desa id                                          #
+#             --> IBSmills_valid_desa.dta                            #
+#                                                                    #
+#           - crosswalked annual village shapefiles and 2010 map:    #
+#             --> desa_1998_crosswalked.shp to 2009                  #
+#             --> indo_by_desa_2010.shp                              #
+#                                                                    #
+#           - Heilmayr georeferenced mills                           #
+#             --> traseMills_capEstyear.xlsx                         #
+#                                                                    #
+#   Output: several subsets of IBS mills, depending on how they      #
+#           matched with Heilmayr's.                                 #
+#   
+######################################################################
+######################################################################
+
+# LOAD OR INSTALL NECESSARY PACKAGES 
+
+rm(list = ls())
+# List all packages needed for session
+neededPackages = c("dplyr", "readxl", "sf", "rgdal", "foreign", "readstata13") 
+
+allPackages    = c(neededPackages %in% installed.packages()[ , "Package"]) 
+
+# Install packages (if not already installed) 
+if(!all(allPackages)) {
+  missingIDX = which(allPackages == FALSE)
+  needed     = neededPackages[missingIDX]
+  lapply(needed, install.packages)
+}
+
+# Load all defined packages
+lapply(neededPackages, library, character.only = TRUE)
+
+#######################################################################
+
+# WORKING DIRECTORY
+setwd("C:/Users/guyv/ownCloud/opalval/build/temp/mill_geolocalization")
+
+# read Heilmayr mills
+heilmayr <- read_excel("traseMills_capEstyear.xlsx")
+
+# read IBS mills
+ibs_desa <- read.dta13("IBSmills_valid_desa.dta")
+
+
+################################# ASSOCIATE DESA GEOMETRIES TO IBS DESA_ID ###########################################
+#templates:
+ibs_desa[,"geom"] <- c(1:nrow(ibs_desa))
+#annual_n_badcodes <- data.frame(year = c(1998:2010))
+#annual_n_badcodes$n_obs <- c(1998:2010)
+
+
+t <- 1998 
+while(t < 2010){
+  #read year t desa shapefile
+  annualpolypath <- paste0("village_shapefiles/desa_",t,"_crosswalked.shp")
+  annual_desa_poly <- st_read(annualpolypath)
+  
+  # give the column in "using" the same name as in master 
+  names(annual_desa_poly)[names(annual_desa_poly) == paste0("d__",t)] <- "desa_id"
+  
+  mills_t <- filter(ibs_desa, year == t)
+  
+  #bc <- 0 
+  for(i in mills_t$firm_id){
+    # desa code of the mill from year t. 
+    desa_of_i <- mills_t[mills_t$firm_id == i, "desa_id"]
+    
+    # some desa codes are not found in village maps (holes in crosswalk probably, or misreported desa codes in ibs*)
+    if(nrow(annual_desa_poly[annual_desa_poly$desa_id == desa_of_i, "geometry"])!= 0){
+      # give the corresponding desa geometry. 
+        ibs_desa[ibs_desa$firm_id == i, "geom"] <- annual_desa_poly[annual_desa_poly$desa_id == desa_of_i, "geometry"] 
+
+    } else {
+      ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
+      
+      #bc <- bc + 1
+    }
+  }
+  #accounts for mismatches peryear
+  #annual_n_badcodes[annual_n_badcodes$year == t, "n_obs"] <- bc
+  rm(annual_desa_poly)
+  t <- t+1
+}  
+
+
+# 2010 
+desa_map_2010 <- st_read("village_shapefiles/desa_map_2010/indo_by_desa_2010.shp")
+names(desa_map_2010)[names(desa_map_2010) == "IDSP2010"] <- "desa_id"
+mills_t <- filter(ibs_desa, year == 2010)
+bc <- 0 
+ndu_desa <- 0
+#ibs_desa$from_du_desa <- c(1:nrow(ibs_desa))*0
+for(i in mills_t$firm_id){
+  # desa code of the mill from year t. 
+  desa_of_i <- mills_t[mills_t$firm_id == i, "desa_id"]
+  
+  # All desa codes are found in village maps (no holes issue since this is the actual map of 2010 - not crosswalked). But pb is that 
+  # there are duplicates in IDSP2010 so that several polygons may match with one desa_id. 
+  if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) == 1){
+    # give the corresponding desa geometry. 
+    ibs_desa[ibs_desa$firm_id == i, "geom"] <- desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"] 
+    
+  } else if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) > 1){
+    ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
+    ndu_desa <- ndu_desa + 1
+    #ibs_desa[ibs_desa$firm_id == i, "from_du_desa"] <- 1
+  } else if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) == 0){
+    ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
+    bc <- bc + 1
+  }
+}
+#ibs_desa[ibs_desa$from_du_desa == 1,]
+#accounts for mismatches peryear
+#annual_n_badcodes[annual_n_badcodes$year == 2010, "n_obs"] <- bc
+
+# * we don't try to match these desa codes with n-1 or n-2 years of village maps because there is a risk that these codes correspond to 
+# different areas in other years.
+
+
+
+########################################### MATCH IBS AND HEILMAYR MILLS ################################################
+## Indonesian CRS
+#   Following http://www.geo.hunter.cuny.edu/~jochen/gtech201/lectures/lec6concepts/map%20coordinate%20systems/how%20to%20choose%20a%20projection.htm
+#   the Cylindrical Equal Area projection seems appropriate for Indonesia extending east-west along equator. 
+#   According to https://spatialreference.org/ref/sr-org/8287/ the Proj4 is 
+#   +proj=cea +lon_0=0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs
+#   which we center at Indonesian longitude with lat_ts = 0 and lon_0 = 115.0 
+indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+
+#prepare the sfc of ibs mills and their most recently known villages. 
+ibs <- filter(ibs_desa, is.na(geom)== F)   
+ibs_desa_na <- filter(ibs_desa, is.na(geom))
+ibs <- st_as_sf(ibs, crs = indonesian_crs)
+ibs <- st_transform(ibs, crs = indonesian_crs)
+
+# prepare heilmayr dataset
+heilmayr <- select(heilmayr, parent_co, mill_name, est_year, latitude, longitude)
+heilmayr$latitude <- as.numeric(heilmayr$latitude)
+heilmayr$longitude <- as.numeric(heilmayr$longitude)
+heilmayr$lat <- heilmayr$latitude
+heilmayr$lon <- heilmayr$longitude
+heilmayr <- st_as_sf(heilmayr,	coords	=	c("longitude",	"latitude"), crs = indonesian_crs)
+heilmayr <- st_transform(heilmayr, crs = indonesian_crs)
+
+
+
+#match 
+ibs_j <- st_join(x = ibs, y = heilmayr, join = st_contains, left = T) # is equivalent to ibs_j <- st_join(x = ibs, y = heilmayr) bc default is st_intersect.
+
+#plot(st_geometry(ibs[ibs$firm_id == 1761,]))
+#plot(st_geometry(heilmayr[heilmayr$mill_name == "PT. Socfin - Seumanyam",]), add = TRUE, col = "red")
+
+
+
+########################################### IDENTIFY DIFFERENTLY MATCHED SUBSETS ######################################################
+
+no_nas <- ibs_j[is.na(ibs_j$lon)==F,] # 355 non-missings
+nrow(no_nas[unique(no_nas$firm_id),])
+# 245 ibs mills are in a village where at least one Heilmayr mill stands. 
+
+pot_otm <- no_nas[!(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] # 173
+# these are the 173 potential one-to-many matches (the ibs mill is the sole mill from ibs mills (we know the desa of) to be in this village and 
+# there may be several Heilmayr mills in this same village.). 
+# Among them, there are:
+  oto <- pot_otm[!(duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE)), ] 
+  # 132 IBS mills we know the desa of that are the only ibs mills in it while there is only one Heilmayr mill in this village.  
+
+  otm <- pot_otm[duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE), ]
+  # 41 IBS mills with identified desa in which they are the only ibs mills, but where there is more than one Heilmayr mill. 
+  nrow(distinct(otm, lat, lon)) # 27 Heilmayr mills are involved.
+  
+du <- no_nas[(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
+# these are the 72 ibs mills with identified desa that are in the same desa with at least another ibs one.
+# These villages with many ibs may encompass either one or many Heilmayr mills. 
+
+noto <- rbind(otm, du)
+# these are the 100 ibs mills that have an identified desa and are either m:m, o:m or m:o with Heilmayr mills. 
+
+total_potential <- ibs_j[unique(ibs_j$mill_name),] 
+# these are the 256 mills of which we know the coordinates that are within the villages of IBS mills. 
+
+## So, the maximum number of pre-2011 ibs mills we can hope to geolocalize with this desa matching technique is 256. 
+## The minimum number is 132 (unless we double-check them with workers and some don't match). 
+
+
+#### Those that have a desa polygon but match with no Heilmayr mills (592)
+# It is useless to try to find them manually with the directory number of workers and Heilmayr's list. 
+# we can still find their names with directories and google-search them, and/or directly spot them manually within their villages. 
+ibs_unref <- left_join(x = ibs, y = st_set_geometry(oto[,c("firm_id","lat")], NULL), by = "firm_id")
+ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lat))
+
+ibs_unref <- left_join(x = ibs_unref, y = st_set_geometry(noto[,c("firm_id","lon")], NULL), by = "firm_id")
+ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lon))
+
+ibs_unref <- select(ibs_unref, -lon, -lat)
+# (the use of "lat" and "lon" was just an arbitrary choice of non-empty variables to flag oto and noto resp.)
+
+# They are in 455 different polygons, of which 359 do not intersect with another one
+# (intersections but not equal likely when there is a split and a mill is associated with the polygon of the village before, and one or more 
+#other mills are associated with the villages after the split.)
+#ibs_unref$grp = sapply(st_equals(ibs_unref), max)
+#ibs_unref <- arrange(ibs_unref, grp, firm_id)
+#nrow(ibs_unref[unique(ibs_unref$grp),])
+
+#ibs_unref$grp_int = sapply(st_intersects(ibs_unref), max)
+#nrow(ibs_unref[unique(ibs_unref$grp_int),])
+
+#plot(st_geometry(ibs_unref[ibs_unref$grp == 1 | ibs_unref$grp == 355,]), add = F)
+#plot(st_geometry(ibs_unref[ibs_unref$grp == 355,]), add = F)
+
+# also, this is 473 different year_desa_id, meaning that there are cases where two mills have equal polygons but no equal year_desa_id: these are the 
+# cases of two mills being associated to the same polygon but with desa_ids from different years. 
+#ibs_unref$year_desa_id <- paste(ibs_unref$year, ibs_unref$desa_id, sep = "")
+#nrow(ibs_unref[unique(ibs_unref$year_desa_id),])
+
+
+
+######################################### EXPORT THEM ACCORDINGLY ##############################################################################
+
+#### Those that have no desa polygon though they had an un-flagged desa_id (76)
+# they return to stata to get merged with the panel and geolocalized manually. 
+ibs_desa_na <- select(ibs_desa_na, firm_id)
+write.dta(ibs_desa_na, "pre2011_bad_desa_id.dta")
+
+
+#### Those that have a desa polygon but match with no Heilmayr mills (592)
+#ibs_unref <- select(ibs_unref, firm_id, year, geom)
+ibs_unref$desa_id <- as.character(ibs_unref$desa_id)
+#st_write(ibs_unref,"unreferenced_mill_desa.gpkg", driver = "GPKG", delete_dsn = TRUE)
+st_write(ibs_unref,"unreferenced_mill_desa.shp", driver = "geojson", delete_dsn = TRUE)
+
+
+
+#### Those who matched (oto & noto)
+## oto
+oto <- st_set_geometry(oto, NULL)
+oto <- select(oto, firm_id)
+write.dta(oto, "oto.dta")
+
+## noto 
+# sort by desa geometry to ease manual matching
+noto$grp = sapply(st_equals(noto), max)
+noto <- arrange(noto, grp, firm_id)
+noto <- st_set_geometry(noto, NULL)
+noto <- select(noto, firm_id, parent_co, mill_name, est_year, lat, lon, grp)
+write.dta(noto, "noto.dta")
