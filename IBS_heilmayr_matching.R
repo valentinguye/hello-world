@@ -3,12 +3,8 @@
 #   Match IBS mill dataset with Heilmayr's                           #
 #                                                                    #
 #   Input:  - IBS mills, each of the year it has the most recent     #
-#             valid desa id                                          #
-#             --> IBSmills_valid_desa.dta                            #
-#                                                                    #
-#           - crosswalked annual village shapefiles and 2010 map:    #
-#             --> desa_1998_crosswalked.shp to 2009                  #
-#             --> indo_by_desa_2010.shp                              #
+#             valid desa id, with the corresponding geometries       #
+#             --> IBSmills_desageom.Rdata                            #
 #                                                                    #
 #           - Heilmayr georeferenced mills                           #
 #             --> traseMills_capEstyear.xlsx                         #
@@ -46,84 +42,7 @@ setwd("C:/Users/guyv/ownCloud/opalval/build/temp/mill_geolocalization")
 heilmayr <- read_excel("traseMills_capEstyear.xlsx")
 
 # read IBS mills
-ibs_desa <- read.dta13("IBSmills_valid_desa.dta")
-
-
-################################# ASSOCIATE DESA GEOMETRIES TO IBS DESA_ID ###########################################
-#templates:
-ibs_desa[,"geom"] <- c(1:nrow(ibs_desa))
-#annual_n_badcodes <- data.frame(year = c(1998:2010))
-#annual_n_badcodes$n_obs <- c(1998:2010)
-
-
-t <- 1998 
-while(t < 2010){
-  #read year t desa shapefile
-  annualpolypath <- paste0("village_shapefiles/desa_",t,"_crosswalked.shp")
-  annual_desa_poly <- st_read(annualpolypath)
-  
-  # give the column in "using" the same name as in master 
-  names(annual_desa_poly)[names(annual_desa_poly) == paste0("d__",t)] <- "desa_id"
-  
-  mills_t <- filter(ibs_desa, year == t)
-  
-  #bc <- 0 
-  for(i in mills_t$firm_id){
-    # desa code of the mill from year t. 
-    desa_of_i <- mills_t[mills_t$firm_id == i, "desa_id"]
-    
-    # some desa codes are not found in village maps (holes in crosswalk probably, or misreported desa codes in ibs*)
-    if(nrow(annual_desa_poly[annual_desa_poly$desa_id == desa_of_i, "geometry"])!= 0){
-      # give the corresponding desa geometry. 
-        ibs_desa[ibs_desa$firm_id == i, "geom"] <- annual_desa_poly[annual_desa_poly$desa_id == desa_of_i, "geometry"] 
-
-    } else {
-      ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
-      
-      #bc <- bc + 1
-    }
-  }
-  #accounts for mismatches peryear
-  #annual_n_badcodes[annual_n_badcodes$year == t, "n_obs"] <- bc
-  rm(annual_desa_poly)
-  t <- t+1
-}  
-
-
-# 2010 
-desa_map_2010 <- st_read("village_shapefiles/desa_map_2010/indo_by_desa_2010.shp")
-names(desa_map_2010)[names(desa_map_2010) == "IDSP2010"] <- "desa_id"
-mills_t <- filter(ibs_desa, year == 2010)
-bc <- 0 
-ndu_desa <- 0
-#ibs_desa$from_du_desa <- c(1:nrow(ibs_desa))*0
-for(i in mills_t$firm_id){
-  # desa code of the mill from year t. 
-  desa_of_i <- mills_t[mills_t$firm_id == i, "desa_id"]
-  
-  # All desa codes are found in village maps (no holes issue since this is the actual map of 2010 - not crosswalked). But pb is that 
-  # there are duplicates in IDSP2010 so that several polygons may match with one desa_id. 
-  if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) == 1){
-    # give the corresponding desa geometry. 
-    ibs_desa[ibs_desa$firm_id == i, "geom"] <- desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"] 
-    
-  } else if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) > 1){
-    ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
-    ndu_desa <- ndu_desa + 1
-    #ibs_desa[ibs_desa$firm_id == i, "from_du_desa"] <- 1
-  } else if(nrow(desa_map_2010[desa_map_2010$desa_id == desa_of_i, "geometry"]) == 0){
-    ibs_desa[ibs_desa$firm_id == i, "geom"] <- NA
-    bc <- bc + 1
-  }
-}
-#ibs_desa[ibs_desa$from_du_desa == 1,]
-#accounts for mismatches peryear
-#annual_n_badcodes[annual_n_badcodes$year == 2010, "n_obs"] <- bc
-
-# * we don't try to match these desa codes with n-1 or n-2 years of village maps because there is a risk that these codes correspond to 
-# different areas in other years.
-
-
+ibs_desa <- readRDS("IBSmills_desageom.Rdata")
 
 ########################################### MATCH IBS AND HEILMAYR MILLS ################################################
 ## Indonesian CRS
@@ -169,13 +88,13 @@ pot_otm <- no_nas[!(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, from
 # these are the 173 potential one-to-many matches (the ibs mill is the sole mill from ibs mills (we know the desa of) to be in this village and 
 # there may be several Heilmayr mills in this same village.). 
 # Among them, there are:
-  oto <- pot_otm[!(duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE)), ] 
-  # 132 IBS mills we know the desa of that are the only ibs mills in it while there is only one Heilmayr mill in this village.  
+oto <- pot_otm[!(duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE)), ] 
+# 132 IBS mills we know the desa of that are the only ibs mills in it while there is only one Heilmayr mill in this village.  
 
-  otm <- pot_otm[duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE), ]
-  # 41 IBS mills with identified desa in which they are the only ibs mills, but where there is more than one Heilmayr mill. 
-  nrow(distinct(otm, lat, lon)) # 27 Heilmayr mills are involved.
-  
+otm <- pot_otm[duplicated(pot_otm$mill_name) | duplicated(pot_otm$mill_name, fromLast = TRUE), ]
+# 41 IBS mills with identified desa in which they are the only ibs mills, but where there is more than one Heilmayr mill. 
+nrow(distinct(otm, lat, lon)) # 27 Heilmayr mills are involved.
+
 du <- no_nas[(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
 # these are the 72 ibs mills with identified desa that are in the same desa with at least another ibs one.
 # These villages with many ibs may encompass either one or many Heilmayr mills. 
