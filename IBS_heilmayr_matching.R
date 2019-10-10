@@ -102,8 +102,10 @@ du <- no_nas[(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast =
 noto <- rbind(otm, du)
 # these are the 100 ibs mills that have an identified desa and are either m:m, o:m or m:o with Heilmayr mills. 
 
-total_potential <- ibs_j[unique(ibs_j$mill_name),] 
+total_potential <- no_nas[!duplicated(no_nas$lon),]
 # these are the 256 mills of which we know the coordinates that are within the villages of IBS mills. 
+# Note: that two mills have exactly the same name but have completely different coordinates. 
+#total_potential[total_potential$mill_name == "PT. Usaha Sawit Mandiri",]
 
 ## So, the maximum number of pre-2011 ibs mills we can hope to geolocalize with this desa matching technique is 256. 
 ## The minimum number is 132 (unless we double-check them with workers and some don't match). 
