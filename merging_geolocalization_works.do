@@ -1,3 +1,18 @@
+/*
+This script merges together the spreadsheets used for manual geolocalization. 
+Then, it makes manual modifications to resolve conflicts (mill name or coordinates duplicates).
+
+It needs: 
+
+"noto_done.xls", "Sheet1"
+"mills_to_georeference_pre2011_done.xlsx", "Mills to georef"
+"mills_to_georeference_post2010_done.xlsx", "mills to georef"
+"traseMills_capEstyear.xlsx", "traseMills_capEstyear"
+"IBS_1998_cleaned.dta"
+
+*/
+
+
 *Put everything back together with the coordinates.
 cd "C:\Users\guyv\ownCloud\opalval\build\temp\mill_geolocalization"
 
@@ -154,7 +169,7 @@ merge m:1 firm_id using "mills_to_georeference_pre2011_done.dta", generate(merge
 merge m:1 firm_id using "mills_to_georeference_post2010_done.dta", generate(merge_post2010) keepusing(mill_name lat lon) update
 
 
-* MANUAL WORK FOR CONFLICTING CASES WHERE DIFFERENT firm_id HAVE THE SAME MILL_NAME
+* MANUAL WORK FOR CONFLICTING CASES WHERE DIFFERENT firm_id HAVE THE SAME MILL_NAME OR SAME COORDINATES
 
 /*firm_id that were found to be the same mill as another firm_id while performing the manual geolocalization.
 The oldest firm_id is kept
